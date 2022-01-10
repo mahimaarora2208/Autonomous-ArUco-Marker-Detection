@@ -130,15 +130,19 @@ class BotController(object):
                 rospy.loginfo("Pose for {}: [{},{},{}] [{},{},{},{}]"
                               .format(self._robot_name, x_pos, y_pos, z_pos, x_rot, y_rot, z_rot, w_rot))
 
-                # create broadcast for marker
-                self.broadcast_marker(
-                    x_pos, y_pos, z_pos, x_rot, y_rot, z_rot, w_rot)
                 if self.fiducial_id == 0:
-                    self.marker0_list = [x_pos, y_pos, z_pos, x_rot, y_rot, z_rot, w_rot]
+                    # create broadcast for marker
+                    self.broadcast_marker(
+                    x_pos, y_pos, z_pos, x_rot, y_rot, z_rot, w_rot, 'fiducial_0')
+                    # self.marker0_list = [x_pos, y_pos, z_pos, x_rot, y_rot, z_rot, w_rot]
                 elif self.fiducial_id == 1:
-                    self.marker1_list = [ x_pos, y_pos, z_pos, x_rot, y_rot, z_rot, w_rot]
+                    self.broadcast_marker(
+                    x_pos, y_pos, z_pos, x_rot, y_rot, z_rot, w_rot, 'fiducial_1')
+                    # self.marker1_list = [ x_pos, y_pos, z_pos, x_rot, y_rot, z_rot, w_rot]
                 elif self.fiducial_id == 2:
-                    self.marker2_list = [ x_pos, y_pos, z_pos, x_rot, y_rot, z_rot, w_rot]  
+                    self.broadcast_marker(
+                    x_pos, y_pos, z_pos, x_rot, y_rot, z_rot, w_rot, 'fiducial_2')
+                    # self.marker2_list = [ x_pos, y_pos, z_pos, x_rot, y_rot, z_rot, w_rot]  
                 else:
                     rospy.loginfo('Marker id is different.')
 
@@ -162,6 +166,7 @@ class BotController(object):
 
         self.current_x_pos = msg.pose.pose.position.x
         self.current_y_pos = msg.pose.pose.position.y
+        self.current_z_pos = msg.pose.pose.position.z
         self.current_orientation = euler_from_quaternion(quaternion)
 
     def get_transform(self, parent_frame, child_frame):
@@ -179,7 +184,10 @@ class BotController(object):
             self.current_x_pos = trans[0]
             self.current_y_pos = trans[1]
             self.current_z_pos = trans[2]
-            self.current_orientation = rot
+            rot_euler = euler_from_quaternion(rot)
+            self.current_orientation = rot_euler
+            
+            
             rospy.loginfo("odom: ({},{}), {}".format(
                 self.current_x_pos,
                 self.current_y_pos,
@@ -355,7 +363,7 @@ class BotController(object):
         self.go_to_goal(3, 6)
         self.rotate_in_place()
         # Gets transform from marker frame to odom
-        controller.get_transform('/odom','/marker')
+        controller.get_transform('/odom','/fiducial_0')
         self.marker0_xpos = self.current_x_pos
         self.marker0_ypos = self.current_y_pos
         self.marker0_zpos = self.current_z_pos
@@ -366,7 +374,7 @@ class BotController(object):
         self.go_to_goal(5, 0)
         self.rotate_in_place()
         # Gets transform from marker frame to odom
-        controller.get_transform('/odom','/marker')
+        controller.get_transform('/odom','/fiducial_1')
         self.marker1_xpos = self.current_x_pos
         self.marker1_ypos = self.current_y_pos
         self.marker1_zpos = self.current_z_pos
@@ -376,7 +384,7 @@ class BotController(object):
 
         self.go_to_goal(3, -6)
         self.rotate_in_place()
-        controller.get_transform('/odom','/marker')
+        controller.get_transform('/odom','/fiducial_2')
         self.marker2_xpos = self.current_x_pos
         self.marker2_ypos = self.current_y_pos
         self.marker2_zpos = self.current_z_pos
@@ -464,10 +472,10 @@ class BotController(object):
                          "marker",
                          "/camera_rgb_optical_frame")
 
-    def broadcast_marker(self, x, y, z, rot_x, rot_y, rot_z, rot_w):
+    def broadcast_marker(self, x, y, z, rot_x, rot_y, rot_z, rot_w, marker_name):
         br = tf.TransformBroadcaster()
         br.sendTransform((x, y, z), (rot_x, rot_y, rot_z, rot_w), rospy.Time.now(),
-                         "marker",
+                         marker_name,
                          "/camera_rgb_optical_frame")
 
     def update_yaml(self):
