@@ -10,6 +10,7 @@ project(rwa3_group)
 find_package(catkin REQUIRED COMPONENTS
   aruco_detect
   geometry_msgs
+  fiducial_msgs
   nav_msgs
   rospy
 )
