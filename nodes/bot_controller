@@ -1,14 +1,10 @@
 #!/usr/bin/env python
-import sys
-sys.path.insert(1, '/home/mahima/enpm809e_ws/src/rwa3_group')
-from cv2 import rotate
+
 import rospy
 import sys
 from rwa3_group.util import compute_distance
 import tf
-# import os
 import yaml
-# from nodes.fiducial_sub import FiducialSubscriber 
 from geometry_msgs.msg import Twist, Point
 from nav_msgs.msg import Odometry
 from tf.transformations import euler_from_quaternion
@@ -16,67 +12,6 @@ from math import radians, degrees, atan2, pi
 from sensor_msgs.msg import LaserScan
 import rospy
 from fiducial_msgs.msg import FiducialTransformArray
-# from 
-
-class FiducialSubscriber:
-    """
-    A subscriber class to read messages from the fiducial_transforms topic.
-
-    Attributes:
-        _anonymous (bool): flag to create an anonymous node
-        _robot_name (str): Name of the robot
-
-    """
-    def __init__(self, anonymous=False):
-        """
-        Initialize object attributes.
-
-        Args:
-            anonymous: Flag to check whether or not we need to create 
-            anonymous nodes.
-            anonymous=True will give a unique id to the node
-            anonymous=True allows you to create multiple instances of this node
-
-        Returns:
-            None
-        """
-        self._anonymous = anonymous
-        self._robot_name = "waffle"
-        rospy.init_node("fiducial_subscriber", anonymous=self._anonymous)
-        rospy.Subscriber("fiducial_transforms", FiducialTransformArray, self.callback)
-        # setup subscribers and callbacks
-        rospy.spin()
-
-
-    def callback(self, msg):
-        """
-
-        Args:
-            msg:
-        """
-        if msg.transforms is not None:
-            for m in msg.transforms:
-                x_pos = m.transform.translation.x
-                y_pos = m.transform.translation.y
-                z_pos = m.transform.translation.z
-                x_rot = m.transform.rotation.x
-                y_rot = m.transform.rotation.y
-                z_rot = m.transform.rotation.z
-                w_rot = m.transform.rotation.w
-                rospy.loginfo("Pose for {}: [{},{},{}] [{},{},{},{}]"
-                        .format(self._robot_name, x_pos, y_pos, z_pos, x_rot, y_rot, z_rot, w_rot))
-                
-                quaternion = (
-                pose.orientation.x,
-                pose.orientation.y,
-                pose.orientation.z,
-                pose.orientation.w)
-                euler = tf.transformations.euler_from_quaternion(quaternion)
-                roll = euler[0]
-                pitch = euler[1]
-                yaw = euler[2]        
-        else:
-            rospy.loginfo('ArUco marker not detected yet....Searching...')
 
 
 class BotController(object):
@@ -91,7 +26,10 @@ class BotController(object):
             'cmd_vel', Twist, queue_size=10)
         rospy.Subscriber("odom", Odometry, self.odom_callback)
         # rospy.Subscriber("scan", LaserScan, self.sensor_callback)
+        rospy.Subscriber("fiducial_transforms",
+                         FiducialTransformArray, self.marker_callback)
 
+        self.marker_detected = False
         self._rate = rospy.Rate(rate)
         self._robot_name = 'waffle'
         self._velocity_msg = Twist()
@@ -107,13 +45,14 @@ class BotController(object):
         # start position of the robot
         self._initial_x_pos = None
         self._initial_y_pos = None
+        self.markerinfo_list = []
 
         # set up a tf listener to retrieve transform between the robot and the world
         self._tf_listener = tf.TransformListener()
         # parent frame for the listener
         self._parent_frame = '/odom'
         # child frame for the listener
-        self._child_frame = '/marker'
+        self._child_frame = '/base_footprint'
 
     @property
     def current_x_pos(self):
@@ -139,6 +78,35 @@ class BotController(object):
     def current_orientation(self, orientation):
         self._current_orientation = orientation
 
+    def marker_callback(self, msg):
+        """
+        Gets data from topic /fiducial_transforms and creates a broadcast called marker
+        Args:
+            msg:
+        """
+
+        if msg.transforms:
+            rospy.loginfo('ArUco Marker : DETECTED !!!')
+            self.marker_detected = True
+            for m in msg.transforms:
+                x_pos = m.transform.translation.x
+                y_pos = m.transform.translation.y
+                z_pos = m.transform.translation.z
+                x_rot = m.transform.rotation.x
+                y_rot = m.transform.rotation.y
+                z_rot = m.transform.rotation.z
+                w_rot = m.transform.rotation.w
+                rospy.loginfo("Pose for {}: [{},{},{}] [{},{},{},{}]"
+                              .format(self._robot_name, x_pos, y_pos, z_pos, x_rot, y_rot, z_rot, w_rot))
+
+                # create broadcast for marker
+                self.broadcast_marker(
+                    x_pos, y_pos, z_pos, x_rot, y_rot, z_rot, w_rot)
+
+        else:
+            self.marker_detected = False
+            rospy.loginfo('ArUco Marker : NOT DETECTED yet....Searching...')
+
     def odom_callback(self, msg):
         """
         Callback function for the Topic odom
@@ -153,14 +121,14 @@ class BotController(object):
         self.current_y_pos = msg.pose.pose.position.y
         self.current_orientation = euler_from_quaternion(quaternion)
 
-    def get_transform(self):
+    def get_transform(self, parent_frame, child_frame):
         """
         Get the current pose of the marker in the world frame.
         """
         try:
             now = rospy.Time.now()
-            self._tf_listener.waitForTransform(self._parent_frame,
-                                               self._child_frame,
+            self._tf_listener.waitForTransform(parent_frame,
+                                               child_frame,
                                                now,
                                                rospy.Duration(5))
             (trans, rot) = self._tf_listener.lookupTransform(
@@ -186,7 +154,7 @@ class BotController(object):
             distance_to_drive (float): Distance to drive in meter.
             forward (bool, optional): Direction. Defaults to True.
         """
-        self.get_transform()
+        self.get_transform(self._parent_frame, self._child_frame)
         self._initial_x_pos = self.current_x_pos
         self._initial_y_pos = self.current_y_pos
 
@@ -291,7 +259,7 @@ class BotController(object):
         """
         rospy.loginfo("Go to goal ({}, {})".format(goal_x, goal_y))
         # get position and yaw from transform
-        self.get_transform()
+        self.get_transform(self._parent_frame, self._child_frame)
 
         distance_to_goal = compute_distance(
             self.current_x_pos, self.current_y_pos, goal_x, goal_y)
@@ -335,14 +303,17 @@ class BotController(object):
                 rospy.loginfo("Goal reached")
                 break
 
+    def rotate_in_place(self):
+        if not self.marker_detected:
+            self.run(0, 0.2)
 
     def continue_program(self):
-        # my_subscriber = FiducialSubscriber()
-        self.rotate(90)
+        self.go_to_goal(5, 0)
+        self.rotate_in_place()
         self.go_to_goal(3, -6)
-        self.rotate(90)
+        self.rotate_in_place()
         self.go_to_goal(3, 6)
-        self.rotate(90)
+        self.rotate_in_place()
         rospy.loginfo("[INFO]: All three aruco markers detected!")
         rospy.loginfo("[INFO]: Updating yaml file.............")
         self.go_to_goal(1, 1)
@@ -399,7 +370,6 @@ class BotController(object):
             y = rospy.get_param("~y")
             if x and y or x == 0 or y == 0:
                 self.go_to_goal(x, y)
-                self.continue_program()
             else:
                 rospy.logerr("x or y is missing")
                 rospy.on_shutdown(self.myhook)
@@ -422,6 +392,12 @@ class BotController(object):
                          "marker",
                          "/camera_rgb_optical_frame")
 
+    def broadcast_marker(self, x, y, z, rot_x, rot_y, rot_z, rot_w):
+        br = tf.TransformBroadcaster()
+        br.sendTransform((x, y, z), (rot_x, rot_y, rot_z, rot_w), rospy.Time.now(),
+                         "marker",
+                         "/camera_rgb_optical_frame")
+
     def update_yaml(self):
         fname = "output/output.yaml"
         stream = open(fname, 'r')
@@ -439,6 +415,9 @@ class BotController(object):
 if __name__ == '__main__':
     try:
         controller = BotController()
-        controller.handle_inputs()
+        controller.continue_program()
+        # Gets transform from marker frame to odom
+        #  self.get_transform(self._parent_frame, self._child_frame)
+
     except rospy.ROSInterruptException:
         rospy.loginfo("Action terminated.")
