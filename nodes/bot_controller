@@ -417,7 +417,7 @@ if __name__ == '__main__':
         controller = BotController()
         controller.continue_program()
         # Gets transform from marker frame to odom
-        #  self.get_transform(self._parent_frame, self._child_frame)
+        controller.get_transform('/odom','/marker')
 
     except rospy.ROSInterruptException:
         rospy.loginfo("Action terminated.")
