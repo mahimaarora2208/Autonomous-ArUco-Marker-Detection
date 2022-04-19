@@ -1,5 +1,7 @@
 #!/usr/bin/env python
 
+from multiprocessing.connection import wait
+import time
 import rospy
 import sys
 from rwa3_group.util import compute_distance
@@ -12,6 +14,7 @@ from math import radians, degrees, atan2, pi
 from sensor_msgs.msg import LaserScan
 import rospy
 from fiducial_msgs.msg import FiducialTransformArray
+from yaml import Loader, load, dump
 
 
 class BotController(object):
@@ -86,8 +89,9 @@ class BotController(object):
         """
 
         if msg.transforms:
-            rospy.loginfo('ArUco Marker : DETECTED !!!')
+            rospy.loginfo('ArUco Marker : DETECTED')
             self.marker_detected = True
+            self.run(0,0) # Turtlebot stops when marker is detected
             for m in msg.transforms:
                 x_pos = m.transform.translation.x
                 y_pos = m.transform.translation.y
@@ -101,11 +105,11 @@ class BotController(object):
 
                 # create broadcast for marker
                 self.broadcast_marker(
-                    x_pos, y_pos, z_pos, x_rot, y_rot, z_rot, w_rot)
+                    x_pos, y_pos, z_pos, x_rot, y_rot, z_rot, w_rot)  
 
         else:
             self.marker_detected = False
-            rospy.loginfo('ArUco Marker : NOT DETECTED yet....Searching...')
+            rospy.loginfo('ArUco Marker : NOT DETECTED...Searching...')
 
     def odom_callback(self, msg):
         """
@@ -304,15 +308,14 @@ class BotController(object):
                 break
 
     def rotate_in_place(self):
-        if not self.marker_detected:
-            self.run(0, 0.2)
+        self.run(0, 0.2)
 
     def continue_program(self):
+        self.go_to_goal(3, 6)
+        self.rotate_in_place()
         self.go_to_goal(5, 0)
         self.rotate_in_place()
         self.go_to_goal(3, -6)
-        self.rotate_in_place()
-        self.go_to_goal(3, 6)
         self.rotate_in_place()
         rospy.loginfo("[INFO]: All three aruco markers detected!")
         rospy.loginfo("[INFO]: Updating yaml file.............")
@@ -327,10 +330,12 @@ class BotController(object):
             linear (float): linear velocity
             angular (float): angular velocity
         """
+       
         velocity = Twist()
         velocity.linear.x = linear
         velocity.angular.z = angular
         self._velocity_publisher.publish(velocity)
+        rospy.sleep(20.0)
 
     def myhook(self):
         """
@@ -401,7 +406,7 @@ class BotController(object):
     def update_yaml(self):
         fname = "output/output.yaml"
         stream = open(fname, 'r')
-        data = yaml.load(stream)
+        data = yaml.load(stream, Loader = Loader)
         data['aruco_marker_0']['xyz'] = [0, 10, 0]
         data['aruco_marker_0']['rpy'] = [1, 1, 1]
         data['aruco_marker_1']['xyz'] = [0, 10, 0]
@@ -412,12 +417,16 @@ class BotController(object):
             yaml_file.write(yaml.dump(data, default_flow_style=False))
 
 
+                
+
 if __name__ == '__main__':
     try:
         controller = BotController()
         controller.continue_program()
+        # controller.update_yaml()
+       
         # Gets transform from marker frame to odom
-        controller.get_transform('/odom','/marker')
+        # controller.get_transform('/odom','/marker')
 
     except rospy.ROSInterruptException:
         rospy.loginfo("Action terminated.")
