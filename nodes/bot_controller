@@ -48,7 +48,28 @@ class BotController(object):
         # start position of the robot
         self._initial_x_pos = None
         self._initial_y_pos = None
-        self.markerinfo_list = []
+        # marker final values
+        self.marker0_xpos = None
+        self.marker0_ypos = None
+        self.marker0_zpos = None
+        self.marker0_r = None
+        self.marker0_p = None
+        self.marker0_y = None
+
+        self.marker1_xpos = None
+        self.marker1_ypos = None
+        self.marker1_zpos = None
+        self.marker1_r = None
+        self.marker1_p = None
+        self.marker1_y = None
+    
+        self.marker2_xpos = None
+        self.marker2_ypos = None
+        self.marker2_zpos = None
+        self.marker2_r = None
+        self.marker2_p = None
+        self.marker2_y = None
+        
 
         # set up a tf listener to retrieve transform between the robot and the world
         self._tf_listener = tf.TransformListener()
@@ -92,6 +113,8 @@ class BotController(object):
             rospy.loginfo('ArUco Marker : DETECTED')
             self.marker_detected = True
             self.run(0,0) # Turtlebot stops when marker is detected
+            fiducial_markerType = msg.frame_id
+            
             for m in msg.transforms:
                 x_pos = m.transform.translation.x
                 y_pos = m.transform.translation.y
@@ -105,7 +128,8 @@ class BotController(object):
 
                 # create broadcast for marker
                 self.broadcast_marker(
-                    x_pos, y_pos, z_pos, x_rot, y_rot, z_rot, w_rot)  
+                    x_pos, y_pos, z_pos, x_rot, y_rot, z_rot, w_rot)
+
 
         else:
             self.marker_detected = False
@@ -313,6 +337,7 @@ class BotController(object):
     def continue_program(self):
         self.go_to_goal(3, 6)
         self.rotate_in_place()
+        # self.marker_detected = False
         self.go_to_goal(5, 0)
         self.rotate_in_place()
         self.go_to_goal(3, -6)
@@ -407,12 +432,12 @@ class BotController(object):
         fname = "output/output.yaml"
         stream = open(fname, 'r')
         data = yaml.load(stream, Loader = Loader)
-        data['aruco_marker_0']['xyz'] = [0, 10, 0]
-        data['aruco_marker_0']['rpy'] = [1, 1, 1]
-        data['aruco_marker_1']['xyz'] = [0, 10, 0]
-        data['aruco_marker_1']['rpy'] = [1, 1, 1]
-        data['aruco_marker_2']['xyz'] = [0, 10, 0]
-        data['aruco_marker_2']['rpy'] = [1, 1, 1]
+        data['aruco_marker_0']['xyz'] = [self.marker0_xpos, self.marker0_ypos, self.marker0_zpos]
+        data['aruco_marker_0']['rpy'] = [self.marker0_r, self.marker0_p, self.marker0_y]
+        data['aruco_marker_1']['xyz'] = [self.marker1_xpos, self.marker1_ypos, self.marker1_zpos]
+        data['aruco_marker_1']['rpy'] = [self.marker1_r, self.marker1_p, self.marker1_y]
+        data['aruco_marker_2']['xyz'] = [self.marker2_xpos, self.marker2_ypos, self.marker2_zpos]
+        data['aruco_marker_2']['rpy'] = [self.marker2_r, self.marker2_p, self.marker2_y]
         with open(fname, 'w') as yaml_file:
             yaml_file.write(yaml.dump(data, default_flow_style=False))
 

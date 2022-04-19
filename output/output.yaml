@@ -1,27 +1,27 @@
 aruco_marker_0:
   rpy:
-  - 1
-  - 1
-  - 1
+  - null
+  - null
+  - null
   xyz:
-  - 0
-  - 10
-  - 0
+  - null
+  - null
+  - null
 aruco_marker_1:
   rpy:
-  - 1
-  - 1
-  - 1
+  - null
+  - null
+  - null
   xyz:
-  - 0
-  - 10
-  - 0
+  - null
+  - null
+  - null
 aruco_marker_2:
   rpy:
-  - 1
-  - 1
-  - 1
+  - null
+  - null
+  - null
   xyz:
-  - 0
-  - 10
-  - 0
+  - null
+  - null
+  - null
