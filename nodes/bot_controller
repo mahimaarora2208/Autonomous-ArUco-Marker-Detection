@@ -42,6 +42,7 @@ class BotController(object):
         self._velocity_msg.angular.z = 0.1
         self._current_x_pos = None
         self._current_y_pos = None
+        self.current_z_pos = None
         self._current_orientation = None
         self._initial_orientation = None
         self._yaw = None
@@ -69,7 +70,11 @@ class BotController(object):
         self.marker2_r = None
         self.marker2_p = None
         self.marker2_y = None
-        
+
+        self.marker0_list = []
+        self.marker1_list = []
+        self.marker2_list = []
+        self.fiducial_id = None
 
         # set up a tf listener to retrieve transform between the robot and the world
         self._tf_listener = tf.TransformListener()
@@ -112,9 +117,7 @@ class BotController(object):
         if msg.transforms:
             rospy.loginfo('ArUco Marker : DETECTED')
             self.marker_detected = True
-            self.run(0,0) # Turtlebot stops when marker is detected
-            fiducial_markerType = msg.frame_id
-            
+            self.run(0,0) # Turtlebot stops when marker is detected            
             for m in msg.transforms:
                 x_pos = m.transform.translation.x
                 y_pos = m.transform.translation.y
@@ -123,12 +126,24 @@ class BotController(object):
                 y_rot = m.transform.rotation.y
                 z_rot = m.transform.rotation.z
                 w_rot = m.transform.rotation.w
+                self.fiducial_id = m.fiducial_id
                 rospy.loginfo("Pose for {}: [{},{},{}] [{},{},{},{}]"
                               .format(self._robot_name, x_pos, y_pos, z_pos, x_rot, y_rot, z_rot, w_rot))
 
                 # create broadcast for marker
                 self.broadcast_marker(
                     x_pos, y_pos, z_pos, x_rot, y_rot, z_rot, w_rot)
+                if self.fiducial_id == 0:
+                    self.marker0_list = [x_pos, y_pos, z_pos, x_rot, y_rot, z_rot, w_rot]
+                elif self.fiducial_id == 1:
+                    self.marker1_list = [ x_pos, y_pos, z_pos, x_rot, y_rot, z_rot, w_rot]
+                elif self.fiducial_id == 2:
+                    self.marker2_list = [ x_pos, y_pos, z_pos, x_rot, y_rot, z_rot, w_rot]  
+                else:
+                    rospy.loginfo('Marker id is different.')
+
+                self.marker_detected = False              
+                
 
 
         else:
@@ -170,6 +185,8 @@ class BotController(object):
                 self.current_y_pos,
                 self.current_z_pos,
                 self.current_orientation[2]))
+
+
         except (tf.Exception, tf.ConnectivityException, tf.LookupException):
             rospy.logfatal("TF Exception")
 
@@ -337,15 +354,40 @@ class BotController(object):
     def continue_program(self):
         self.go_to_goal(3, 6)
         self.rotate_in_place()
-        # self.marker_detected = False
+        # Gets transform from marker frame to odom
+        controller.get_transform('/odom','/marker')
+        self.marker0_xpos = self.current_x_pos
+        self.marker0_ypos = self.current_y_pos
+        self.marker0_zpos = self.current_z_pos
+        self.marker0_r = self.current_orientation[0]
+        self.marker0_p = self.current_orientation[1]
+        self.marker0_y = self.current_orientation[2]
+
         self.go_to_goal(5, 0)
         self.rotate_in_place()
+        # Gets transform from marker frame to odom
+        controller.get_transform('/odom','/marker')
+        self.marker1_xpos = self.current_x_pos
+        self.marker1_ypos = self.current_y_pos
+        self.marker1_zpos = self.current_z_pos
+        self.marker1_r = self.current_orientation[0]
+        self.marker1_p = self.current_orientation[1]
+        self.marker1_y = self.current_orientation[2]
+
         self.go_to_goal(3, -6)
         self.rotate_in_place()
+        controller.get_transform('/odom','/marker')
+        self.marker2_xpos = self.current_x_pos
+        self.marker2_ypos = self.current_y_pos
+        self.marker2_zpos = self.current_z_pos
+        self.marker2_r = self.current_orientation[0]
+        self.marker2_p = self.current_orientation[1]
+        self.marker2_y = self.current_orientation[2]
+        
         rospy.loginfo("[INFO]: All three aruco markers detected!")
         rospy.loginfo("[INFO]: Updating yaml file.............")
         self.go_to_goal(1, 1)
-        exit()
+        # exit()
 
     def run(self, linear, angular):
         """
@@ -360,7 +402,7 @@ class BotController(object):
         velocity.linear.x = linear
         velocity.angular.z = angular
         self._velocity_publisher.publish(velocity)
-        rospy.sleep(20.0)
+        rospy.sleep(25.0)
 
     def myhook(self):
         """
@@ -429,7 +471,7 @@ class BotController(object):
                          "/camera_rgb_optical_frame")
 
     def update_yaml(self):
-        fname = "output/output.yaml"
+        fname = "/home/mahima/enpm809e_ws/src/rwa3_group/output/output.yaml"
         stream = open(fname, 'r')
         data = yaml.load(stream, Loader = Loader)
         data['aruco_marker_0']['xyz'] = [self.marker0_xpos, self.marker0_ypos, self.marker0_zpos]
@@ -448,10 +490,8 @@ if __name__ == '__main__':
     try:
         controller = BotController()
         controller.continue_program()
-        # controller.update_yaml()
-       
-        # Gets transform from marker frame to odom
-        # controller.get_transform('/odom','/marker')
+        controller.update_yaml()
+        
 
     except rospy.ROSInterruptException:
         rospy.loginfo("Action terminated.")
