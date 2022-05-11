@@ -16,7 +16,7 @@ import rospy
 from fiducial_msgs.msg import FiducialTransformArray
 from yaml import Loader, load, dump
 
-
+# added test comment
 class BotController(object):
     """
     A controller class to drive a turtlebot in Gazebo.
